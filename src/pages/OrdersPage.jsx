@@ -202,6 +202,10 @@ export default function OrdersPage() {
                       <span className="inline-flex px-2 py-0.5 rounded-full text-[11.5px] font-semibold bg-yellow-100 text-yellow-800">
                         ⏳ Awaiting payment
                       </span>
+                    ) : o.payMethod === 'Cash on Delivery' ? (
+                      <span className="inline-flex px-2 py-0.5 rounded-full text-[11.5px] font-semibold bg-orange-100 text-orange-800">
+                        💵 Cash on Delivery
+                      </span>
                     ) : (
                       <span className="inline-flex px-2 py-0.5 rounded-full text-[11.5px] font-semibold bg-gray-100 text-gray-500">
                         Pay on arrival

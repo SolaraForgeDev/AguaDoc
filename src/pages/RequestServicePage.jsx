@@ -77,6 +77,7 @@ export default function RequestServicePage({ user, onOrderPlaced }) {
   const [loading,   setLoading]   = useState(false);
   const [success,   setSuccess]   = useState(false);
   const [error,     setError]     = useState('');
+  const [payMode,   setPayMode]   = useState('online'); // 'online' | 'cod' — delivery only
 
   const isWalkin   = orderType === 'walkin';
   const isDelivery = orderType === 'delivery';
@@ -117,7 +118,32 @@ export default function RequestServicePage({ user, onOrderPlaced }) {
   }
 }
 
-  // ── Delivery: real GCash/Maya payment via Xendit — leaves this page entirely ──
+  // ── Delivery, Cash on Delivery: pay the rider directly, no gateway involved ──
+  async function handleConfirmCOD() {
+  setLoading(true);
+  setError('');
+  try {
+    await apiAddOrder({
+      userId:      user.id,
+      type:        'Delivery',
+      priority,
+      quantity,
+      address,
+      notes,
+      payMethod:   'Cash on Delivery',
+      total,
+      status:      'Pending',
+    });
+    setSuccess(true);
+    onOrderPlaced?.();
+  } catch {
+    setError('Failed to place order. Please try again.');
+  } finally {
+    setLoading(false);
+  }
+}
+
+  // ── Delivery, pay online now: real GCash/Maya payment via Xendit — leaves this page entirely ──
   async function handlePayNow() {
   setLoading(true);
   setError('');
@@ -138,22 +164,24 @@ export default function RequestServicePage({ user, onOrderPlaced }) {
   }
 }
 
-  // ── Success screen (walk-in only — delivery success is shown after returning from Xendit) ──
+  // ── Success screen (walk-in and COD-delivery only — online-payment success is shown after returning from Xendit) ──
   if (success) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-center">
         <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center text-4xl mb-4">✅</div>
         <h2 className="text-xl font-bold text-[#0f172a] mb-2">Order Placed!</h2>
         <p className="text-gray-500 text-sm mb-6">
-          Your walk-in order has been received. Please pay when you arrive.
+          {isWalkin
+            ? 'Your walk-in order has been received. Please pay when you arrive.'
+            : 'Your delivery order has been received. Please have the payment ready for the rider.'}
         </p>
         <div className="bg-white rounded-2xl shadow-sm px-8 py-5 text-sm text-left space-y-2 min-w-[260px] mb-6">
-          <div className="flex justify-between"><span className="text-gray-400">Type</span><span className="font-semibold">Walk-in / Pickup</span></div>
+          <div className="flex justify-between"><span className="text-gray-400">Type</span><span className="font-semibold">{isWalkin ? 'Walk-in / Pickup' : 'Delivery (Cash on Delivery)'}</span></div>
           <div className="flex justify-between"><span className="text-gray-400">Gallons</span><span className="font-semibold">{quantity}</span></div>
           <div className="flex justify-between"><span className="text-gray-400">Total</span><span className="font-bold text-[#0ea5c9]">₱{total.toFixed(2)}</span></div>
         </div>
         <button
-          onClick={() => { setSuccess(false); setStep(1); setOrderType(''); setPriority('normal'); setQuantity(1); setAddress(user?.address || ''); setNotes(''); }}
+          onClick={() => { setSuccess(false); setStep(1); setOrderType(''); setPriority('normal'); setQuantity(1); setAddress(user?.address || ''); setNotes(''); setPayMode('online'); }}
           className="bg-[#0ea5c9] hover:bg-[#0284a8] text-white font-semibold px-8 py-3 rounded-xl transition text-sm"
         >
           Place Another Order
@@ -344,14 +372,41 @@ export default function RequestServicePage({ user, onOrderPlaced }) {
               </div>
             </div>
 
-            {/* Payment */}
+            {/* Payment method */}
             <div className="mb-4">
-              <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-3">Payment</p>
-              <div className="bg-gray-50 rounded-xl p-4 text-center">
-                <p className="text-sm text-gray-500 mb-1">You'll be taken to a secure Xendit page to pay via</p>
-                <p className="text-sm font-bold text-[#0f172a] mb-3">💙 GCash &nbsp; or &nbsp; 💚 Maya</p>
-                <p className="text-xs text-gray-400">Your order is only confirmed once payment actually goes through — no manual reference number needed.</p>
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-3">Payment Method</p>
+              <div className="flex gap-3 mb-3">
+                <button
+                  onClick={() => setPayMode('online')}
+                  className={`flex-1 rounded-xl border-2 p-3 text-left transition cursor-pointer
+                    ${payMode === 'online' ? 'border-[#0ea5c9] bg-[#f0fafd]' : 'border-gray-200 bg-white hover:border-[#0ea5c9]/40'}`}
+                >
+                  <div className="text-lg mb-1">💳</div>
+                  <div className="font-bold text-sm text-[#0f172a]">Pay Online Now</div>
+                  <div className="text-xs text-gray-500 mt-0.5">GCash or Maya</div>
+                </button>
+                <button
+                  onClick={() => setPayMode('cod')}
+                  className={`flex-1 rounded-xl border-2 p-3 text-left transition cursor-pointer
+                    ${payMode === 'cod' ? 'border-[#0ea5c9] bg-[#f0fafd]' : 'border-gray-200 bg-white hover:border-[#0ea5c9]/40'}`}
+                >
+                  <div className="text-lg mb-1">💵</div>
+                  <div className="font-bold text-sm text-[#0f172a]">Cash on Delivery</div>
+                  <div className="text-xs text-gray-500 mt-0.5">Pay the rider</div>
+                </button>
               </div>
+
+              {payMode === 'online' ? (
+                <div className="bg-gray-50 rounded-xl p-4 text-center">
+                  <p className="text-sm text-gray-500 mb-1">You'll be taken to a secure Xendit page to pay via</p>
+                  <p className="text-sm font-bold text-[#0f172a] mb-3">💙 GCash &nbsp; or &nbsp; 💚 Maya</p>
+                  <p className="text-xs text-gray-400">Your order is only confirmed once payment actually goes through — no manual reference number needed.</p>
+                </div>
+              ) : (
+                <div className="bg-gray-50 rounded-xl p-4 text-center">
+                  <p className="text-sm text-gray-500">Have <span className="font-bold text-[#0f172a]">₱{total.toFixed(2)}</span> ready in cash for the rider when your order arrives.</p>
+                </div>
+              )}
             </div>
 
             {error && <p className="text-red-500 text-xs mb-3">{error}</p>}
@@ -361,10 +416,17 @@ export default function RequestServicePage({ user, onOrderPlaced }) {
                 className="border border-gray-200 text-gray-600 font-semibold px-5 py-2.5 rounded-xl text-sm hover:bg-gray-50 transition">
                 ← Back
               </button>
-              <button onClick={handlePayNow} disabled={loading}
-                className="bg-[#0ea5c9] hover:bg-[#0284a8] text-white font-semibold px-6 py-2.5 rounded-xl text-sm transition disabled:opacity-60">
-                {loading ? 'Redirecting...' : '💳 Pay Now'}
-              </button>
+              {payMode === 'online' ? (
+                <button onClick={handlePayNow} disabled={loading}
+                  className="bg-[#0ea5c9] hover:bg-[#0284a8] text-white font-semibold px-6 py-2.5 rounded-xl text-sm transition disabled:opacity-60">
+                  {loading ? 'Redirecting...' : '💳 Pay Now'}
+                </button>
+              ) : (
+                <button onClick={handleConfirmCOD} disabled={loading}
+                  className="bg-[#0ea5c9] hover:bg-[#0284a8] text-white font-semibold px-6 py-2.5 rounded-xl text-sm transition disabled:opacity-60">
+                  {loading ? 'Placing...' : '✅ Confirm Order'}
+                </button>
+              )}
             </div>
           </div>
         )}
