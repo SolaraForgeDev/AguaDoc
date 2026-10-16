@@ -8,6 +8,15 @@ export async function apiLogin(username, password) {
   return res.json();
 }
 
+export async function apiAcceptTerms(id, termsVersion) {
+  const res = await fetch(`${BASE}/users/${id}/accept-terms`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ termsVersion })
+  });
+  const result = await res.json();
+  if (!res.ok) throw new Error(result.message || 'Could not save your agreement');
+  return result;
+}
 export async function apiRegister(data) {
   const res = await fetch(`${BASE}/register`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },

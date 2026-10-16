@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { apiRegister } from '../api';
 import { Eye, EyeOff, User, Lock, Mail, Phone, MapPin, Users } from 'lucide-react';
+import { TermsModal, TERMS_VERSION } from '../components/TermsContent';
 
 // ✅ Moved OUTSIDE — defined once, never recreated
 function Field({ label, icon: Icon, children }) {
@@ -25,6 +26,9 @@ export default function RegisterPage({ onGoLogin, onLogin }) {
   const [showConfirm, setShowConfirm] = useState(false);
   const [error, setError]          = useState('');
   const [loading, setLoading]      = useState(false);
+  const [showTerms, setShowTerms]  = useState(false);
+  const [readTerms, setReadTerms]  = useState(false); // the box stays locked until they've opened the terms
+  const [agreed, setAgreed]        = useState(false);
 
   const set = (field) => (e) => setForm({ ...form, [field]: e.target.value });
 
@@ -39,6 +43,10 @@ export default function RegisterPage({ onGoLogin, onLogin }) {
       setError('Please fill in all required fields');
       return;
     }
+    if (!agreed) {
+      setError('Please read and accept the Terms & Agreement to continue');
+      return;
+    }
     setLoading(true);
     try {
       const result = await apiRegister({
@@ -49,6 +57,8 @@ export default function RegisterPage({ onGoLogin, onLogin }) {
         address:  form.address,
         gender:   form.gender,
         fullName: form.username,
+        termsAccepted: true,
+        termsVersion: TERMS_VERSION,
       });
       if (result.success) {
         onLogin(result.user);
@@ -124,13 +134,44 @@ export default function RegisterPage({ onGoLogin, onLogin }) {
             </select>
           </Field>
 
+          {/* Terms & Agreement — must be opened before the box can be ticked */}
+          <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+            <label className={`flex items-start gap-2 text-xs ${readTerms ? 'text-gray-600 cursor-pointer' : 'text-gray-400 cursor-not-allowed'}`}>
+              <input
+                type="checkbox"
+                checked={agreed}
+                disabled={!readTerms}
+                onChange={e => setAgreed(e.target.checked)}
+                className="mt-0.5 accent-[#0ea5c9]"
+              />
+              <span>
+                I have read and agree to the{' '}
+                <button type="button" onClick={() => setShowTerms(true)} className="text-[#0ea5c9] font-medium hover:underline">
+                  Terms & Agreement
+                </button>
+                , including paying any balance I take on credit (utang).
+              </span>
+            </label>
+            {!readTerms && (
+              <p className="text-[11px] text-gray-400 mt-1.5 ml-5">Tap "Terms & Agreement" and read it first to unlock this box.</p>
+            )}
+          </div>
+
           {error && <p className="text-red-500 text-xs text-center">{error}</p>}
 
-          <button type="submit" disabled={loading}
+          <button type="submit" disabled={loading || !agreed}
             className="w-full bg-[#0ea5c9] hover:bg-[#0284a8] text-white font-semibold py-3 rounded-xl transition disabled:opacity-60 text-sm mt-1">
             {loading ? 'Registering...' : 'Register'}
           </button>
         </form>
+
+        {showTerms && (
+          <TermsModal
+            onClose={() => setShowTerms(false)}
+            onAccept={() => { setReadTerms(true); setShowTerms(false); }}
+            acceptLabel="I have read this"
+          />
+        )}
 
         <p className="text-center text-xs text-gray-400 mt-4">
           Already have an account?{' '}

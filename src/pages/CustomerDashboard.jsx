@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
-import { LayoutDashboard, ShoppingCart, CreditCard, LogOut, Bell, User } from 'lucide-react';
+import { LayoutDashboard, ShoppingCart, CreditCard, LogOut, Bell, User, Info } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { apiGetOrders, apiUpdateUser, apiGetNotifications, apiMarkNotificationRead, apiMarkAllNotificationsRead, apiGetRiderLocation } from '../api';
+import { apiGetOrders, apiUpdateUser, apiAcceptTerms, apiGetNotifications, apiMarkNotificationRead, apiMarkAllNotificationsRead, apiGetRiderLocation } from '../api';
 import RequestServicePage from './RequestServicePage';
+import { TermsModal, TermsGate, TERMS_VERSION } from '../components/TermsContent';
 
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -45,6 +46,8 @@ export default function CustomerDashboard({ user, onLogout, onUpdateUser }) {
   const [loading, setLoading] = useState(true);
   const [notifications, setNotifications] = useState([]);
   const [showNotifs, setShowNotifs]        = useState(false);
+  const [showTerms, setShowTerms]          = useState(false); // the ⓘ reminder
+  const [acceptingTerms, setAcceptingTerms] = useState(false);
   const [checkoutBanner, setCheckoutBanner] = useState(null); // { type: 'success'|'cancel', text }
   const [trackingOrderId, setTrackingOrderId] = useState(null); // which order's live map is expanded
   const [rider, setRider] = useState(null); // { lat, lng, updatedAt } | null
@@ -183,6 +186,26 @@ export default function CustomerDashboard({ user, onLogout, onUpdateUser }) {
   return (
     <div className="flex h-screen bg-[#f0f6fb] overflow-hidden">
 
+      {/* Accounts created before the credit terms existed must accept them once */}
+      {!user?.termsAcceptedAt && (
+        <TermsGate
+          loading={acceptingTerms}
+          onDecline={onLogout}
+          onAccept={async () => {
+            setAcceptingTerms(true);
+            try {
+              const res = await apiAcceptTerms(user.id, TERMS_VERSION);
+              onUpdateUser?.({ ...user, termsAcceptedAt: res.termsAcceptedAt, termsVersion: res.termsVersion });
+            } catch {
+              alert('Could not save your agreement. Please try again.');
+            } finally {
+              setAcceptingTerms(false);
+            }
+          }}
+        />
+      )}
+      {showTerms && <TermsModal onClose={() => setShowTerms(false)} />}
+
       {/* Sidebar (desktop/tablet only — mobile uses the bottom nav bar instead) */}
       <aside className="hidden md:flex w-52 bg-[#0f2a4a] flex-col py-6 px-4 shrink-0">
         <div className="flex items-center gap-2 mb-10 px-1">
@@ -219,6 +242,13 @@ export default function CustomerDashboard({ user, onLogout, onUpdateUser }) {
             <span className="text-gray-400 text-sm shrink-0">🔍</span>
             <input placeholder="Search orders..." className="bg-transparent text-sm outline-none flex-1 min-w-0 text-gray-500" />
           </div>
+          <button
+            onClick={() => setShowTerms(true)}
+            title="Terms & Agreement (credit / utang)"
+            className="text-gray-400 hover:text-[#0ea5c9] shrink-0"
+          >
+            <Info size={20} />
+          </button>
           <button
             onClick={() => setShowNotifs(v => !v)}
             className="relative text-gray-400 hover:text-gray-600 shrink-0"

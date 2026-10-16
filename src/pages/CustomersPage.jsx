@@ -7,6 +7,7 @@ import { useApp } from '../context/AppContext';
 import Modal from '../components/ui/Modal';
 import { showToast } from '../components/ui/Toast';
 import { apiAddCustomer, apiUpdateCustomer } from '../api';
+import { printAgreement } from '../components/TermsContent';
 
 const PRICE_PER_GALLON = 40; // walk-ins pick up in person — no delivery fee added
 
@@ -17,7 +18,7 @@ export default function CustomersPage() {
   const [filter, setFilter]               = useState('All');
   const [saving, setSaving]               = useState(false);
   const [form, setForm]                   = useState({ name: '', phone: '', addr: '' });
-  const [editForm, setEditForm]           = useState({ name: '', phone: '', addr: '', orders: '' });
+  const [editForm, setEditForm]           = useState({ name: '', phone: '', addr: '', orders: '', agreementSigned: false });
 
   // Replaces filterCustomers()
   const filtered = state.customers.filter(c => {
@@ -56,6 +57,7 @@ export default function CustomersPage() {
       phone: c.phone ?? '',
       addr: c.address ?? '',
       orders: c.orders ?? 0,
+      agreementSigned: !!c.agreementSignedAt,
     });
   }
 
@@ -77,6 +79,7 @@ export default function CustomersPage() {
         address: editForm.addr,
         balance,
         orders,
+        agreementSigned: editForm.agreementSigned,
       });
       dispatch({ type: 'UPDATE_CUSTOMER', payload: updated });
       showToast(`✅ ${editForm.name} updated!`);
@@ -122,7 +125,7 @@ export default function CustomersPage() {
         <table className="w-full text-[13px] border-collapse">
           <thead className="sticky top-0 bg-white z-10">
             <tr>
-              {['Name', 'Phone', 'Address', 'Balance', 'Orders', 'Actions'].map(h => (
+              {['Name', 'Phone', 'Address', 'Balance', 'Orders', 'Agreement', 'Actions'].map(h => (
                 <th key={h} className="text-left px-3 py-2.5 text-[11.5px] font-semibold text-gray-500 border-b-2 border-gray-200">
                   {h}
                 </th>
@@ -140,18 +143,36 @@ export default function CustomersPage() {
                 </td>
                 <td className="px-3 py-2.5 text-gray-500">{c.orders}</td>
                 <td className="px-3 py-2.5">
+                  {c.agreementSignedAt ? (
+                    <span className="inline-flex px-2 py-0.5 rounded-full text-[11.5px] font-semibold bg-green-100 text-green-800 whitespace-nowrap">
+                      ✔ Signed
+                    </span>
+                  ) : (
+                    <span className="inline-flex px-2 py-0.5 rounded-full text-[11.5px] font-semibold bg-yellow-100 text-yellow-800 whitespace-nowrap">
+                      ⚠ Not signed
+                    </span>
+                  )}
+                </td>
+                <td className="px-3 py-2.5 whitespace-nowrap">
                   <button
                     onClick={() => openEdit(c)}
                     className="border border-gray-200 rounded px-2 py-1 text-xs hover:bg-gray-50"
                   >
                     ✏ Edit
                   </button>
+                  <button
+                    onClick={() => printAgreement(c)}
+                    title="Print the credit agreement for this customer to sign"
+                    className="border border-gray-200 rounded px-2 py-1 text-xs hover:bg-gray-50 ml-1.5"
+                  >
+                    🖨 Agreement
+                  </button>
                 </td>
               </tr>
             ))}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-3 py-6 text-center text-gray-400">
+                <td colSpan={7} className="px-3 py-6 text-center text-gray-400">
                   No walk-in customers yet — click "+ New Customer" to add one.
                 </td>
               </tr>
@@ -253,6 +274,22 @@ export default function CustomersPage() {
                 = ₱{(Number(editForm.orders) || 0) * PRICE_PER_GALLON} balance (₱{PRICE_PER_GALLON}/gallon, no delivery fee for walk-ins).
                 Recording an actual payment on the Payments page reduces this automatically instead.
               </p>
+            </div>
+            <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+              <label className="flex items-start gap-2 text-[12.5px] text-gray-700 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={editForm.agreementSigned}
+                  onChange={e => setEditForm({ ...editForm, agreementSigned: e.target.checked })}
+                  className="mt-0.5 accent-[#0ea5c9]"
+                />
+                <span>Signed paper agreement received from this customer</span>
+              </label>
+              {Number(editForm.orders) > 0 && !editForm.agreementSigned && (
+                <p className="text-[11px] text-yellow-700 mt-1.5 ml-5">
+                  ⚠ This customer has credit but no signed agreement on file. Use "🖨 Agreement" to print one for them to sign.
+                </p>
+              )}
             </div>
           </div>
 

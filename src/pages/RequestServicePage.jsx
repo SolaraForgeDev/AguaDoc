@@ -1,6 +1,8 @@
 // src/pages/RequestServicePage.jsx
 import { useState } from 'react';
+import { Info } from 'lucide-react';
 import { apiAddOrder, apiCreateCheckout } from '../api';
+import { TermsModal } from '../components/TermsContent';
 
 const PRICE_PER_GALLON = 40;
 const DELIVERY_FEE     = 20;
@@ -78,6 +80,7 @@ export default function RequestServicePage({ user, onOrderPlaced }) {
   const [success,   setSuccess]   = useState(false);
   const [error,     setError]     = useState('');
   const [payMode,   setPayMode]   = useState('online'); // 'online' | 'cod' — delivery only
+  const [showTerms, setShowTerms]  = useState(false);
 
   const isWalkin   = orderType === 'walkin';
   const isDelivery = orderType === 'delivery';
@@ -374,7 +377,17 @@ export default function RequestServicePage({ user, onOrderPlaced }) {
 
             {/* Payment method */}
             <div className="mb-4">
-              <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-3">Payment Method</p>
+              <div className="flex items-center gap-1.5 mb-3">
+                <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">Payment Method</p>
+                <button
+                  type="button"
+                  onClick={() => setShowTerms(true)}
+                  title="Terms & Agreement (credit / utang)"
+                  className="text-gray-400 hover:text-[#0ea5c9]"
+                >
+                  <Info size={14} />
+                </button>
+              </div>
               <div className="flex gap-3 mb-3">
                 <button
                   onClick={() => setPayMode('online')}
@@ -431,6 +444,8 @@ export default function RequestServicePage({ user, onOrderPlaced }) {
           </div>
         )}
       </div>
+
+      {showTerms && <TermsModal onClose={() => setShowTerms(false)} />}
     </div>
   );
 }

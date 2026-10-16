@@ -153,8 +153,12 @@ app.get('/return', (req, res) => {
 
 // ── AUTH ──
 app.post('/api/register', async (req, res) => {
-  const { fullName, username, email, password, phone, address, gender } = req.body;
+  const { fullName, username, email, password, phone, address, gender, termsAccepted, termsVersion } = req.body;
   try {
+    // Server-side check too — the checkbox alone can be bypassed by calling the API directly.
+    if (!termsAccepted)
+      return res.status(400).json({ success: false, message: 'You must accept the Terms & Agreement to create an account.' });
+
     const [existing] = await pool.query(
       'SELECT id FROM users WHERE email = ? OR username = ?', [email, username]
     );
@@ -163,10 +167,10 @@ app.post('/api/register', async (req, res) => {
 
     const newId = id();
     await pool.query(
-      'INSERT INTO users (id, fullName, username, email, password, phone, address, gender, role) VALUES (?,?,?,?,?,?,?,?,?)',
-      [newId, fullName || username, username, email, password, phone, address, gender, 'customer']
+      'INSERT INTO users (id, fullName, username, email, password, phone, address, gender, role, termsAcceptedAt, termsVersion) VALUES (?,?,?,?,?,?,?,?,?,NOW(),?)',
+      [newId, fullName || username, username, email, password, phone, address, gender, 'customer', termsVersion || null]
     );
-    res.json({ success: true, user: { id: newId, fullName: fullName || username, username, email, phone, address, gender, role: 'customer' } });
+    res.json({ success: true, user: { id: newId, fullName: fullName || username, username, email, phone, address, gender, role: 'customer', termsAcceptedAt: new Date().toISOString(), termsVersion: termsVersion || null } });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -183,6 +187,23 @@ app.post('/api/login', async (req, res) => {
       return res.status(401).json({ success: false, message: 'Invalid credentials' });
     const { password: _, ...user } = rows[0];
     res.json({ success: true, user });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// Records that an existing account has read and accepted the credit terms.
+app.post('/api/users/:id/accept-terms', async (req, res) => {
+  try {
+    const { termsVersion } = req.body;
+    const [result] = await pool.query(
+      'UPDATE users SET termsAcceptedAt = NOW(), termsVersion = ? WHERE id = ?',
+      [termsVersion || null, req.params.id]
+    );
+    if (result.affectedRows === 0)
+      return res.status(404).json({ success: false, message: 'User not found' });
+    const [[row]] = await pool.query('SELECT termsAcceptedAt, termsVersion FROM users WHERE id = ?', [req.params.id]);
+    res.json({ success: true, ...row });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -285,13 +306,22 @@ app.post('/api/customers', async (req, res) => {
 
 app.put('/api/customers/:id', async (req, res) => {
   try {
-    const { fullName, email, phone, address, balance, orders } = req.body;
+    const { fullName, email, phone, address, balance, orders, agreementSigned } = req.body;
     const [[before]] = await pool.query('SELECT balance FROM customers WHERE id = ?', [req.params.id]);
 
     await pool.query(
       'UPDATE customers SET fullName=?, email=?, phone=?, address=?, balance=?, orders=? WHERE id=?',
       [fullName, email || null, phone, address, balance, orders ?? 0, req.params.id]
     );
+
+    // Only touch the signed-agreement date when the caller actually sent the flag — the Payments page
+    // updates a customer's balance without it and must not wipe a signature.
+    if (agreementSigned !== undefined) {
+      await pool.query(
+        'UPDATE customers SET agreementSignedAt = CASE WHEN ? THEN COALESCE(agreementSignedAt, NOW()) ELSE NULL END WHERE id = ?',
+        [agreementSigned ? 1 : 0, req.params.id]
+      );
+    }
     const [rows] = await pool.query('SELECT * FROM customers WHERE id = ?', [req.params.id]);
 
     // Only fire once, right when the customer crosses INTO high-risk territory — not on every save after that.
